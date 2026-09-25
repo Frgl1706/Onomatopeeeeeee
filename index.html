@@ -1,0 +1,1765 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>戦闘オノマトペ生成エンジン | WARNING LABEL UI</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- 視認性最優先のため、より太いウェイトを強調 -->
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;700;800;900&family=M+PLUS+Rounded+1c:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mplus: ['"M PLUS 1p"', 'sans-serif'],
+                        rounded: ['"M PLUS Rounded 1c"', 'sans-serif'],
+                    },
+                    colors: {
+                        label: {
+                            yellow: '#FFCC00',
+                            red: '#FF3300',
+                            black: '#111111',
+                            white: '#FAFAFA',
+                            gray: '#EBEBEB',
+                            darkgray: '#333333'
+                        }
+                    },
+                    boxShadow: {
+                        'solid-sm': '2px 2px 0px 0px rgba(17,17,17,1)',
+                        'solid': '4px 4px 0px 0px rgba(17,17,17,1)',
+                        'solid-lg': '8px 8px 0px 0px rgba(17,17,17,1)',
+                        'solid-xl': '12px 12px 0px 0px rgba(17,17,17,1)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --font-sans: 'M PLUS 1p', system-ui, -apple-system, sans-serif;
+            --bg-base: #EBEBEB;
+            --text-primary: #111111;
+            --text-secondary: #333333;
+            --border-thick: 4px solid #111111;
+            --border-thin: 2px solid #111111;
+            --warning-yellow: #FFCC00;
+            --warning-red: #FF3300;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            font-weight: 700;
+            padding: 0;
+        }
+        
+        @media (min-width: 640px) {
+            body { padding: 1rem; }
+        }
+        @media (min-width: 1024px) {
+            body { padding: 2rem; }
+        }
+
+        /* 背景の空気感レイヤーは廃止（非表示） */
+        .bg-atmosphere {
+            display: none !important;
+        }
+
+        /* 警告ストライプ */
+        .warning-stripe {
+            background-image: repeating-linear-gradient(
+                -45deg,
+                var(--warning-yellow),
+                var(--warning-yellow) 20px,
+                var(--text-primary) 20px,
+                var(--text-primary) 40px
+            );
+        }
+        
+        .warning-stripe-thin {
+            background-image: repeating-linear-gradient(
+                -45deg,
+                var(--warning-yellow),
+                var(--warning-yellow) 10px,
+                var(--text-primary) 10px,
+                var(--text-primary) 20px
+            );
+        }
+
+        /* パッケージ外枠 */
+        .package-container {
+            background: #FAFAFA;
+            border: 6px solid var(--text-primary);
+            box-shadow: var(--shadow-solid-xl);
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            min-height: calc(100vh - 2rem);
+        }
+        
+        @media (max-width: 639px) {
+            .package-container {
+                border-width: 4px;
+                border-radius: 0;
+                box-shadow: none;
+                min-height: 100vh;
+            }
+        }
+
+        /* Base Card (旧 Glass Card) -> 情報ブロック */
+        .glass-card {
+            background: #FFFFFF;
+            border: var(--border-thick);
+            box-shadow: 4px 4px 0px 0px rgba(17,17,17,1);
+            border-radius: 0;
+            transition: transform 0.1s;
+        }
+
+        /* セグメントコントロール */
+        .segment-control {
+            display: flex;
+            background: #FFFFFF;
+            border: var(--border-thick);
+            padding: 0;
+            position: relative;
+            box-shadow: 4px 4px 0px 0px rgba(17,17,17,1);
+            z-index: 1;
+        }
+
+        .segment-control .segment-indicator {
+            position: absolute;
+            top: -4px;
+            bottom: -4px;
+            left: -4px;
+            background: var(--text-primary);
+            border: var(--border-thick);
+            transition: left 0.2s ease, width 0.2s ease;
+            z-index: -1;
+        }
+
+        .segment-btn {
+            position: relative;
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-family: var(--font-sans);
+            font-weight: 800;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            border-right: var(--border-thick);
+            transition: color 0.2s;
+            white-space: nowrap;
+            flex: 1;
+            text-align: center;
+        }
+        .segment-btn:last-child {
+            border-right: none;
+        }
+        
+        .segment-btn:hover {
+            background: rgba(255, 204, 0, 0.2);
+        }
+
+        .segment-btn.active {
+            color: #FFFFFF;
+        }
+
+        .segment-btn:focus-visible {
+            outline: 4px solid var(--warning-yellow);
+            outline-offset: -4px;
+        }
+
+        /* スタイルチップ */
+        .style-chip-btn {
+            padding: 8px 16px;
+            border: var(--border-thin);
+            background: #FFFFFF;
+            cursor: pointer;
+            font-family: var(--font-sans);
+            font-weight: 800;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            box-shadow: 2px 2px 0px 0px rgba(17,17,17,1);
+            transition: all 0.1s;
+            text-transform: uppercase;
+        }
+
+        .style-chip-btn:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px 0px rgba(17,17,17,1);
+            background: var(--warning-yellow);
+        }
+
+        .style-chip-btn.active {
+            background: var(--text-primary);
+            color: #FFFFFF;
+            box-shadow: inset 2px 2px 0px rgba(0,0,0,0.5);
+            transform: translate(2px, 2px);
+            box-shadow: none;
+        }
+
+        .style-chip-btn:focus-visible {
+            outline: 3px solid var(--warning-yellow);
+        }
+
+        /* スライダー（ダイヤル風） */
+        .aero-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: var(--text-primary);
+            outline: none;
+            cursor: pointer;
+            border: 2px solid var(--text-primary);
+            border-radius: 0;
+            position: relative;
+        }
+
+        .aero-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 32px;
+            background: var(--warning-yellow);
+            border: 4px solid var(--text-primary);
+            cursor: pointer;
+            box-shadow: 2px 2px 0px 0px rgba(17,17,17,1);
+        }
+        
+        .aero-slider::-webkit-slider-thumb:hover {
+            background: #FFFFFF;
+        }
+
+        .aero-slider::-moz-range-thumb {
+            width: 24px;
+            height: 32px;
+            background: var(--warning-yellow);
+            border: 4px solid var(--text-primary);
+            cursor: pointer;
+            box-shadow: 2px 2px 0px 0px rgba(17,17,17,1);
+            border-radius: 0;
+        }
+
+        .aero-slider:focus-visible {
+            outline: 4px dashed var(--warning-yellow);
+            outline-offset: 4px;
+        }
+
+        /* テキストエリア */
+        .aero-textarea {
+            background: #FFFFFF;
+            border: var(--border-thick);
+            padding: 1rem;
+            font-family: var(--font-sans);
+            font-size: 1.2rem;
+            font-weight: 800;
+            line-height: 1.8;
+            color: var(--text-primary);
+            resize: none;
+            outline: none;
+            width: 100%;
+            min-height: 360px;
+            box-shadow: inset 4px 4px 0px rgba(17,17,17,0.05);
+            transition: all 0.2s;
+        }
+
+        .aero-textarea:focus {
+            background: #FFFAEB;
+            box-shadow: inset 4px 4px 0px rgba(17,17,17,0.1);
+            border-color: var(--text-primary);
+        }
+
+        .aero-textarea::placeholder {
+            color: #999999;
+            font-weight: 700;
+        }
+
+        /* ボタン全般 */
+        .btn-aero {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 0;
+            font-family: var(--font-sans);
+            font-weight: 900;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border: var(--border-thick);
+            box-shadow: 4px 4px 0px 0px rgba(17,17,17,1);
+            white-space: nowrap;
+            user-select: none;
+            text-transform: uppercase;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .btn-aero:active {
+            transform: translate(4px, 4px) !important;
+            box-shadow: 0px 0px 0px 0px rgba(17,17,17,1) !important;
+        }
+
+        .btn-aero:focus-visible {
+            outline: 4px solid var(--warning-yellow);
+            outline-offset: 2px;
+        }
+
+        .btn-aero-primary {
+            background: var(--warning-yellow);
+            color: var(--text-primary);
+        }
+
+        .btn-aero-primary:hover {
+            background: #FFE066;
+            transform: translate(-2px, -2px);
+            box-shadow: 6px 6px 0px 0px rgba(17,17,17,1);
+        }
+
+        .btn-aero-secondary {
+            background: #FFFFFF;
+            color: var(--text-primary);
+        }
+
+        .btn-aero-secondary:hover {
+            background: var(--warning-yellow);
+        }
+
+        .btn-aero-ghost {
+            background: transparent;
+            color: var(--text-primary);
+            border: var(--border-thick);
+            box-shadow: 2px 2px 0px 0px rgba(17,17,17,1);
+        }
+
+        .btn-aero-ghost:hover {
+            background: var(--text-primary);
+            color: #FFFFFF;
+        }
+
+        .btn-aero-icon {
+            width: 44px;
+            height: 44px;
+            padding: 0;
+        }
+        
+        .generate-btn-huge {
+            background: var(--warning-red);
+            color: #FFFFFF;
+            font-size: 1.5rem;
+            padding: 1.25rem;
+            border: 6px solid var(--text-primary);
+            box-shadow: 8px 8px 0px 0px rgba(17,17,17,1);
+            position: relative;
+            overflow: hidden;
+            letter-spacing: 0.1em;
+        }
+        
+        .generate-btn-huge:hover {
+            background: #FF5500;
+            transform: translate(-2px, -2px);
+            box-shadow: 10px 10px 0px 0px rgba(17,17,17,1);
+        }
+        
+        .generate-btn-huge::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-linear-gradient(
+                -45deg,
+                transparent,
+                transparent 10px,
+                rgba(0,0,0,0.2) 10px,
+                rgba(0,0,0,0.2) 20px
+            );
+            z-index: 0;
+            pointer-events: none;
+        }
+        
+        .generate-btn-huge > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* サイドメニュー */
+        .side-menu {
+            position: fixed;
+            top: 0;
+            left: -340px;
+            width: 320px;
+            height: 100vh;
+            background: var(--warning-yellow);
+            border-right: 6px solid var(--text-primary);
+            box-shadow: 16px 0 0 rgba(17, 17, 17, 0.2);
+            z-index: 100;
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            overflow-y: auto;
+        }
+
+        .side-menu.open {
+            left: 0;
+        }
+
+        .side-menu-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 90;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .side-menu-backdrop.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .side-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            border-bottom: 4px solid var(--text-primary);
+            cursor: pointer;
+            font-family: var(--font-sans);
+            font-weight: 800;
+            font-size: 1rem;
+            color: var(--text-primary);
+            transition: background 0.1s;
+            background: #FFFFFF;
+            width: 100%;
+            text-align: left;
+            text-transform: uppercase;
+        }
+
+        .side-menu-item:hover {
+            background: var(--text-primary);
+            color: var(--warning-yellow);
+        }
+
+        .side-menu-item:focus-visible {
+            outline: 4px inset var(--warning-yellow);
+        }
+
+        /* モーダル */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-panel {
+            background: #FFFFFF;
+            border: 6px solid var(--text-primary);
+            border-radius: 0;
+            padding: 0;
+            max-width: 560px;
+            width: 100%;
+            box-shadow: 16px 16px 0px 0px rgba(17,17,17,1);
+            transform: scale(0.98);
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            background: var(--warning-yellow);
+            border-bottom: 4px solid var(--text-primary);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.open .modal-panel {
+            transform: scale(1);
+        }
+
+        .modal-close-btn {
+            background: #FFFFFF;
+            border: 3px solid var(--text-primary);
+            border-radius: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-primary);
+            box-shadow: 2px 2px 0px 0px rgba(17,17,17,1);
+            transition: all 0.1s;
+        }
+
+        .modal-close-btn:hover {
+            background: var(--text-primary);
+            color: #FFFFFF;
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px 0px rgba(17,17,17,1);
+        }
+        
+        .modal-close-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 0px 0px 0px 0px rgba(17,17,17,1);
+        }
+
+        /* トースト */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 300;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .toast {
+            background: var(--warning-yellow);
+            border: 4px solid var(--text-primary);
+            border-radius: 0;
+            padding: 12px 20px;
+            box-shadow: 6px 6px 0px 0px rgba(17,17,17,1);
+            font-family: var(--font-sans);
+            font-weight: 900;
+            font-size: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transform: translateY(20px);
+            opacity: 0;
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+            pointer-events: all;
+            text-transform: uppercase;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* コメント欄アクションボタン（JS内でHTML生成時に使用） */
+        .comment-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border: 2px solid var(--text-primary);
+            background: #FFFFFF;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            box-shadow: 2px 2px 0px 0px rgba(17,17,17,1);
+            transition: all 0.1s;
+            text-transform: uppercase;
+        }
+
+        .comment-action-btn:hover {
+            background: var(--warning-yellow);
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px 0px rgba(17,17,17,1);
+        }
+        
+        .comment-action-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 0px 0px 0px 0px rgba(17,17,17,1);
+        }
+
+        /* スクロールバー */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #EBEBEB;
+            border-left: 2px solid var(--text-primary);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--text-primary);
+            border: 2px solid #EBEBEB;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--warning-yellow);
+        }
+
+        /* 見出し装飾ラベル */
+        .section-label {
+            display: inline-flex;
+            align-items: center;
+            background: var(--text-primary);
+            color: #FFFFFF;
+            padding: 4px 12px;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            border: 2px solid var(--text-primary);
+            text-transform: uppercase;
+        }
+        .section-label .tag {
+            background: #FFFFFF;
+            color: var(--text-primary);
+            padding: 0 6px;
+            margin-right: 8px;
+            font-size: 0.75rem;
+            border: 1px solid var(--text-primary);
+        }
+
+        @media (max-width: 640px) {
+            .aero-textarea {
+                min-height: 280px;
+                font-size: 1.1rem;
+                padding: 1rem;
+            }
+            .side-menu {
+                width: 85%;
+                left: -100%;
+            }
+            .generate-btn-huge {
+                font-size: 1.25rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 背景の空気感 (仕様に従い要素は残すがCSSで非表示) -->
+    <div class="bg-atmosphere" aria-hidden="true">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- サイドメニュー用バックドロップ -->
+    <div class="side-menu-backdrop" id="sideMenuBackdrop"></div>
+
+    <!-- サイドメニュー (取扱説明書の目次風) -->
+    <nav class="side-menu" id="sideMenu" aria-label="サイドメニュー" role="navigation">
+        <div class="bg-label-black text-white p-4 flex items-center justify-between border-b-4 border-label-black">
+            <h2 class="font-mplus text-xl font-900 tracking-widest">INDEX / 目次</h2>
+            <button class="modal-close-btn !bg-white !text-label-black" onclick="closeSideMenu()" aria-label="メニューを閉じる">
+                <i data-lucide="x" class="w-5 h-5 font-bold"></i>
+            </button>
+        </div>
+        <div class="flex flex-col">
+            <button class="side-menu-item" onclick="openModal('languageModal')">
+                <i data-lucide="languages" class="w-5 h-5"></i>
+                <span data-i18n="menu_language">LANGUAGE / 言語設定</span>
+            </button>
+            <button class="side-menu-item" onclick="openModal('historyModal')">
+                <i data-lucide="history" class="w-5 h-5"></i>
+                <span data-i18n="menu_history">HISTORY / 沿革</span>
+            </button>
+            <button class="side-menu-item" onclick="openModal('specModal')">
+                <i data-lucide="info" class="w-5 h-5"></i>
+                <span data-i18n="menu_spec">SPEC / 情報・仕様</span>
+            </button>
+        </div>
+        <div class="mt-auto p-4 bg-label-white border-t-4 border-label-black text-center">
+            <div class="inline-block border-2 border-label-black p-1 bg-label-yellow mb-2">
+                <i class="fa-solid fa-barcode text-3xl"></i>
+            </div>
+            <p class="text-xs font-900 text-label-black leading-relaxed" data-i18n="menu_footer">戦闘オノマトペ生成エンジン<br>MODEL: MA-01 / WARNING LABEL ED.</p>
+        </div>
+    </nav>
+
+    <!-- ラベル全体のラッパー -->
+    <div class="package-container">
+        
+        <!-- 上部の警告ストライプ -->
+        <div class="h-6 warning-stripe border-b-[6px] border-label-black w-full shrink-0"></div>
+
+        <!-- ヘッダー (ラベルタイトル部) -->
+        <header class="bg-label-yellow border-b-[6px] border-label-black px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
+            <div class="flex items-center gap-4">
+                <button class="btn-aero btn-aero-secondary btn-aero-icon bg-white shrink-0" onclick="openSideMenu()" aria-label="メニューを開く">
+                    <i data-lucide="menu" class="w-6 h-6"></i>
+                </button>
+                <div class="flex flex-col">
+                    <div class="flex gap-2 items-center mb-1">
+                        <span class="text-xs sm:text-sm font-900 border-2 border-label-black bg-label-black text-label-yellow px-2 py-0.5 shadow-solid-sm uppercase">PRODUCT NO. MA-01</span>
+                        <span class="text-[10px] font-900 bg-white border border-label-black px-1 hidden md:inline-block">INSPECTED</span>
+                    </div>
+                    <h1 class="font-mplus font-900 text-2xl sm:text-3xl lg:text-4xl tracking-tighter text-label-black leading-none flex items-center gap-2">
+                        <i data-lucide="zap" class="w-6 h-6 sm:w-8 sm:h-8"></i>
+                        戦闘オノマトペ生成エンジン
+                    </h1>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+                <!-- 装飾用ダミーバーコード -->
+                <div class="hidden lg:flex gap-1 h-10 w-24 mr-4 opacity-80">
+                    <div class="w-1 bg-black h-full"></div><div class="w-2 bg-black h-full"></div>
+                    <div class="w-1 bg-black h-full"></div><div class="w-3 bg-black h-full"></div>
+                    <div class="w-1 bg-black h-full"></div><div class="w-2 bg-black h-full"></div>
+                    <div class="w-1 bg-black h-full"></div><div class="w-4 bg-black h-full"></div>
+                </div>
+                <button class="btn-aero btn-aero-secondary btn-aero-icon bg-white" onclick="openModal('languageModal')" aria-label="言語設定">
+                    <i data-lucide="languages" class="w-5 h-5"></i>
+                </button>
+                <button class="btn-aero btn-aero-secondary btn-aero-icon bg-white" onclick="openModal('specModal')" aria-label="情報・仕様">
+                    <i data-lucide="info" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- 取扱説明・注意書きセクション (旧ヒーローセクション) -->
+        <section class="border-b-[6px] border-label-black p-4 sm:p-6 bg-white relative overflow-hidden shrink-0" aria-label="タイトル">
+            <!-- 右上のDANGER装飾 -->
+            <div class="absolute top-0 right-0 w-32 h-32 bg-label-yellow border-l-4 border-b-4 border-label-black transform translate-x-16 -translate-y-16 rotate-45 flex items-end justify-center pb-2 shadow-solid pointer-events-none">
+                <span class="font-900 text-label-black text-xl tracking-widest">NOTICE</span>
+            </div>
+            
+            <div class="max-w-4xl relative z-10">
+                <div class="border-[3px] border-label-black inline-block px-3 py-1 bg-label-black text-white font-900 mb-3 text-sm tracking-widest uppercase shadow-solid-sm">
+                    <i class="fa-solid fa-book mr-2"></i>取扱説明書 / INSTRUCTION MANUAL
+                </div>
+                <p class="font-mplus font-900 text-lg sm:text-xl text-label-black leading-snug" data-i18n="hero_subtitle">
+                    オノマトペたりてる？<br class="sm:hidden">
+                    <span class="hidden sm:inline">— </span>水と空気のような清涼感ある戦闘表現を。
+                </p>
+            </div>
+        </section>
+
+        <!-- メインワークスペース -->
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 bg-label-gray flex flex-col gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
+
+                <!-- コントロールエリア（右側の設定を左側に持ってくる方がラベル的に自然だが、構造維持のため既存の順序を使用。CSS Gridで順序調整） -->
+                <section class="lg:col-span-2 flex flex-col gap-5 order-2 lg:order-1" aria-label="コントロールパネル">
+                    
+                    <div class="section-label shadow-solid-sm self-start mb-1">
+                        <span class="tag">SEC.1</span>
+                        <span>PARAMETERS / 生成設定</span>
+                    </div>
+
+                    <!-- フレーバー切り替え -->
+                    <div class="glass-card p-4 sm:p-5">
+                        <label class="block font-mplus font-900 text-sm text-label-black mb-3 border-b-2 border-label-black pb-1 uppercase tracking-widest flex justify-between">
+                            <span data-i18n="flavor_label">フレーバー</span>
+                            <span class="text-xs bg-label-black text-white px-1">FLAVOR</span>
+                        </label>
+                        <div class="segment-control" id="flavorSegment" role="tablist" aria-label="フレーバー切り替え">
+                            <div class="segment-indicator" id="segmentIndicator"></div>
+                            <button class="segment-btn active" data-flavor="all" role="tab" aria-selected="true" data-i18n="flavor_all">ALL</button>
+                            <button class="segment-btn" data-flavor="hard" role="tab" aria-selected="false" data-i18n="flavor_hard">硬派風</button>
+                            <button class="segment-btn" data-flavor="war" role="tab" aria-selected="false" data-i18n="flavor_war">戦争漫画風</button>
+                        </div>
+                    </div>
+
+                    <!-- スタイル選択 -->
+                    <div class="glass-card p-4 sm:p-5">
+                        <label class="block font-mplus font-900 text-sm text-label-black mb-3 border-b-2 border-label-black pb-1 uppercase tracking-widest flex justify-between">
+                            <span data-i18n="style_label">スタイル</span>
+                            <span class="text-xs bg-label-black text-white px-1">STYLE</span>
+                        </label>
+                        <div class="flex flex-wrap gap-2" id="styleChips">
+                            <button class="style-chip-btn active" data-value="impact" data-i18n="style_impact">打撃</button>
+                            <button class="style-chip-btn" data-value="compress" data-i18n="style_compress">圧縮</button>
+                            <button class="style-chip-btn" data-value="tear" data-i18n="style_tear">引き裂き</button>
+                            <button class="style-chip-btn" data-value="twist" data-i18n="style_twist">捻り</button>
+                            <button class="style-chip-btn" data-value="meat" data-i18n="style_meat">肉質</button>
+                            <button class="style-chip-btn" data-value="bite" data-i18n="style_bite">咬み砕き</button>
+                            <button class="style-chip-btn" data-value="slowbite" data-i18n="style_slowbite">じわじわ</button>
+                            <button class="style-chip-btn" data-value="mixed" data-i18n="style_mixed">全部混ぜ</button>
+                        </div>
+                        <input type="hidden" id="style" value="impact">
+                    </div>
+
+                    <!-- スライダー設定 -->
+                    <div class="glass-card p-4 sm:p-5 space-y-5 bg-white bg-[radial-gradient(#ccc_1px,transparent_1px)] [background-size:16px_16px]">
+                        <div class="bg-white border-2 border-label-black p-3 shadow-solid-sm">
+                            <div class="flex items-center justify-between mb-3 border-b-2 border-label-black pb-2">
+                                <label for="power" class="font-mplus font-900 text-sm text-label-black uppercase" data-i18n="power_label">強度 [POWER]</label>
+                                <span class="text-lg font-900 bg-label-yellow border-2 border-label-black px-3" id="powerValue">6</span>
+                            </div>
+                            <div class="px-1 py-2 relative">
+                                <!-- 目盛り風の装飾 -->
+                                <div class="absolute top-0 left-0 right-0 h-1 flex justify-between px-3 pointer-events-none">
+                                    <div class="w-0.5 h-2 bg-black"></div><div class="w-0.5 h-1 bg-black"></div><div class="w-0.5 h-1 bg-black"></div><div class="w-0.5 h-1 bg-black"></div><div class="w-0.5 h-2 bg-black"></div>
+                                </div>
+                                <input type="range" id="power" class="aero-slider" min="1" max="10" value="6" aria-label="強度">
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white border-2 border-label-black p-3 shadow-solid-sm">
+                            <div class="flex items-center justify-between mb-3 border-b-2 border-label-black pb-2">
+                                <label for="wet" class="font-mplus font-900 text-sm text-label-black uppercase" data-i18n="wet_label">湿り気 [WETNESS]</label>
+                                <span class="text-lg font-900 bg-label-yellow border-2 border-label-black px-3" id="wetValue">5</span>
+                            </div>
+                            <div class="px-1 py-2 relative">
+                                <input type="range" id="wet" class="aero-slider" min="0" max="10" value="5" aria-label="湿り気">
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white border-2 border-label-black p-3 shadow-solid-sm">
+                            <div class="flex items-center justify-between mb-3 border-b-2 border-label-black pb-2">
+                                <label for="chain" class="font-mplus font-900 text-sm text-label-black uppercase" data-i18n="chain_label">連続性 [CHAIN]</label>
+                                <span class="text-lg font-900 bg-label-yellow border-2 border-label-black px-3" id="chainValue">8</span>
+                            </div>
+                            <div class="px-1 py-2 relative">
+                                <input type="range" id="chain" class="aero-slider" min="1" max="20" value="8" aria-label="連続性">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 生成ボタン (巨大な警告ボタン風) -->
+                    <button class="generate-btn-huge w-full font-900 mt-2" onclick="generate()" id="generateBtn">
+                        <div class="flex items-center justify-center gap-3">
+                            <i class="fa-solid fa-triangle-exclamation text-3xl"></i>
+                            <span data-i18n="generate">生成する / EXECUTE</span>
+                        </div>
+                    </button>
+
+                </section>
+
+                <!-- 出力エリア（左・メインだが視覚的には右側に配置） -->
+                <section class="lg:col-span-3 flex flex-col order-1 lg:order-2" aria-label="オノマトペ出力エリア">
+                    
+                    <div class="section-label shadow-solid-sm self-start mb-1 bg-label-yellow text-label-black border-label-black">
+                        <span class="tag !bg-label-black !text-label-yellow !border-label-black">SEC.2</span>
+                        <span>OUTPUT / 抽出結果</span>
+                    </div>
+
+                    <div class="glass-card flex-1 flex flex-col p-1 bg-white relative">
+                        <!-- ヘッダー帯 -->
+                        <div class="bg-label-black text-white p-3 flex justify-between items-center border-b-4 border-label-black">
+                            <h2 class="font-mplus font-900 text-lg tracking-widest flex items-center gap-2">
+                                <i class="fa-solid fa-terminal text-label-yellow"></i>
+                                <span data-i18n="output_title">生成結果</span>
+                            </h2>
+                            <div class="flex items-center gap-2">
+                                <button class="btn-aero btn-aero-ghost !text-white !border-white !shadow-none hover:!bg-white hover:!text-black text-xs py-1 px-3" onclick="copyText()" aria-label="コピー">
+                                    <i data-lucide="copy" class="w-4 h-4 mr-1"></i>
+                                    <span data-i18n="copy">COPY</span>
+                                </button>
+                                <button class="btn-aero btn-aero-ghost !text-white !border-white !shadow-none hover:!bg-white hover:!text-black text-xs py-1 px-3" onclick="shareText()" aria-label="共有">
+                                    <i data-lucide="share-2" class="w-4 h-4 mr-1"></i>
+                                    <span data-i18n="share">SHARE</span>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- テキストエリア -->
+                        <div class="p-4 flex-1 flex flex-col bg-[repeating-linear-gradient(transparent,transparent_31px,#ccc_31px,#ccc_32px)]">
+                            <textarea id="output" class="aero-textarea !bg-transparent !border-none !box-shadow-none flex-1 leading-[32px] pt-1" readonly aria-label="生成されたオノマトペ" placeholder="生成ボタンを押すと、ここに戦闘オノマトペが表示されます。"></textarea>
+                        </div>
+                        
+                        <!-- 隅の装飾 -->
+                        <div class="absolute bottom-2 right-2 border-2 border-label-black p-1 opacity-30 pointer-events-none">
+                            <i class="fa-solid fa-qrcode text-3xl"></i>
+                        </div>
+                    </div>
+                </section>
+                
+            </div>
+            
+            <!-- 警告ブロック (免責事項) -->
+            <div class="border-[4px] border-label-red bg-[#FFF5F5] p-4 flex gap-4 items-start shadow-solid">
+                <i class="fa-solid fa-triangle-exclamation text-label-red text-3xl mt-1"></i>
+                <div>
+                    <h3 class="font-900 text-label-red tracking-widest mb-1 text-lg">WARNING</h3>
+                    <p class="text-sm font-800 text-label-black leading-relaxed" data-i18n="disclaimer">
+                        ※ 本ツールはフィクション作品の創作支援を目的としています。実際の暴力行為を推奨するものではありません。
+                    </p>
+                </div>
+            </div>
+
+            <!-- コメント欄 (レポート風) -->
+            <section class="mt-4" aria-label="コメント欄">
+                <div class="section-label shadow-solid-sm self-start mb-1 bg-white text-label-black border-label-black">
+                    <span class="tag !bg-label-black !text-white !border-label-black">SEC.3</span>
+                    <span>USER REPORTS / ユーザー報告書</span>
+                </div>
+                
+                <div class="glass-card p-5 sm:p-6 bg-white border-t-8 border-t-label-black">
+                    <div class="flex justify-between items-end border-b-4 border-label-black pb-2 mb-4">
+                        <h2 class="font-mplus font-900 text-2xl text-label-black flex items-center gap-3 tracking-widest" data-i18n="comment_title">
+                            <i class="fa-solid fa-clipboard-list"></i>
+                            コメント
+                        </h2>
+                        <p class="text-sm font-800 text-label-darkgray" data-i18n="comment_subtitle">感想やリクエストをどうぞ。</p>
+                    </div>
+
+                    <!-- コメント投稿フォーム -->
+                    <div class="flex flex-col md:flex-row gap-3 bg-label-gray p-4 border-4 border-label-black shadow-solid-sm mb-8">
+                        <div class="flex-shrink-0 md:w-1/4 flex flex-col">
+                            <label class="text-xs font-900 mb-1 bg-label-black text-white px-2 py-0.5 inline-block self-start">NAME / 氏名</label>
+                            <input type="text" id="commentName" placeholder="名前（任意）" class="bg-white border-2 border-label-black p-2 font-800 outline-none focus:border-label-yellow focus:ring-2 focus:ring-label-yellow shadow-[2px_2px_0_#111]" aria-label="コメント投稿者名">
+                        </div>
+                        <div class="flex-1 flex flex-col">
+                            <label class="text-xs font-900 mb-1 bg-label-black text-white px-2 py-0.5 inline-block self-start">REPORT / 報告内容</label>
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <input type="text" id="commentText" placeholder="コメントを書く..." class="flex-1 bg-white border-2 border-label-black p-2 font-800 outline-none focus:border-label-yellow focus:ring-2 focus:ring-label-yellow shadow-[2px_2px_0_#111]" aria-label="コメント本文">
+                                <button class="btn-aero btn-aero-primary !px-8" onclick="submitComment()">
+                                    <i class="fa-solid fa-pen mr-2"></i>
+                                    <span data-i18n="comment_post">投稿</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- コメントリスト -->
+                    <div id="commentList" class="space-y-4"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- フッター -->
+        <footer class="border-t-[6px] border-label-black bg-label-yellow py-4 px-4 sm:px-6 lg:px-8 mt-auto shrink-0">
+            <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-industry text-2xl"></i>
+                    <span class="font-900 tracking-widest text-sm" data-i18n="footer_copyright">© 2024 戦闘オノマトペ生成エンジン</span>
+                </div>
+                <div class="flex flex-wrap justify-center items-center gap-2">
+                    <button class="bg-white border-2 border-label-black px-3 py-1 text-xs font-900 shadow-solid-sm hover:bg-label-black hover:text-white transition-colors uppercase" onclick="openModal('historyModal')" data-i18n="footer_history">沿革</button>
+                    <button class="bg-white border-2 border-label-black px-3 py-1 text-xs font-900 shadow-solid-sm hover:bg-label-black hover:text-white transition-colors uppercase" onclick="openModal('specModal')" data-i18n="footer_spec">仕様</button>
+                    <button class="bg-white border-2 border-label-black px-3 py-1 text-xs font-900 shadow-solid-sm hover:bg-label-black hover:text-white transition-colors uppercase" onclick="openModal('languageModal')" data-i18n="footer_language">言語</button>
+                </div>
+            </div>
+        </footer>
+        
+        <!-- 下部の警告ストライプ -->
+        <div class="h-4 warning-stripe w-full shrink-0"></div>
+    </div>
+
+    <!-- 言語設定モーダル -->
+    <div class="modal-overlay" id="languageModal" role="dialog" aria-modal="true" aria-labelledby="languageModalTitle">
+        <div class="modal-panel">
+            <div class="modal-header">
+                <h2 id="languageModalTitle" class="font-mplus font-900 text-xl text-label-black flex items-center gap-2 tracking-widest uppercase">
+                    <i data-lucide="languages" class="w-6 h-6"></i>
+                    <span data-i18n="lang_title">言語設定</span>
+                </h2>
+                <button class="modal-close-btn" onclick="closeModal('languageModal')" aria-label="閉じる">
+                    <i data-lucide="x" class="w-5 h-5 font-bold"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="text-sm font-800 text-label-darkgray mb-4 border-l-4 border-label-yellow pl-2" data-i18n="lang_subtitle">表示言語を選択してください。</p>
+                <div class="flex flex-col gap-3">
+                    <button class="btn-aero btn-aero-secondary w-full justify-between !px-5 border-2 border-label-black" onclick="setLanguage('ja')">
+                        <span class="text-lg">日本語</span>
+                        <span class="text-xs font-900 bg-label-black text-white px-2 py-1">JA</span>
+                    </button>
+                    <button class="btn-aero btn-aero-secondary w-full justify-between !px-5 border-2 border-label-black" onclick="setLanguage('en')">
+                        <span class="text-lg">English</span>
+                        <span class="text-xs font-900 bg-label-black text-white px-2 py-1">EN</span>
+                    </button>
+                </div>
+                <div class="mt-5 border-t-2 border-dashed border-label-black pt-3">
+                    <p class="text-xs font-800 text-label-darkgray" data-i18n="lang_note">※ 一部のテキストのみ翻訳されます。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 沿革モーダル -->
+    <div class="modal-overlay" id="historyModal" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+        <div class="modal-panel">
+            <div class="modal-header">
+                <h2 id="historyModalTitle" class="font-mplus font-900 text-xl text-label-black flex items-center gap-2 tracking-widest uppercase">
+                    <i data-lucide="history" class="w-6 h-6"></i>
+                    <span data-i18n="history_title">沿革</span>
+                </h2>
+                <button class="modal-close-btn" onclick="closeModal('historyModal')" aria-label="閉じる">
+                    <i data-lucide="x" class="w-5 h-5 font-bold"></i>
+                </button>
+            </div>
+            <div class="modal-body bg-[repeating-linear-gradient(transparent,transparent_47px,#ccc_47px,#ccc_48px)] bg-local pt-0">
+                <div class="space-y-6 text-sm font-800 text-label-black leading-relaxed pt-3">
+                    <div class="bg-white border-2 border-label-black p-3 shadow-solid-sm relative">
+                        <span class="absolute -top-3 left-3 bg-label-black text-label-yellow font-900 px-2 border-2 border-label-black">2024</span>
+                        <p class="mt-2" data-i18n="history_2024">戦闘オノマトペ生成エンジン誕生。初期版では単純なランダム生成のみでした。</p>
+                    </div>
+                    <div class="bg-white border-2 border-label-black p-3 shadow-solid-sm relative">
+                        <span class="absolute -top-3 left-3 bg-label-black text-label-yellow font-900 px-2 border-2 border-label-black">2025</span>
+                        <p class="mt-2" data-i18n="history_2025">スタイル選択機能、強度・湿り気・連続性スライダーを追加。表現の幅が大幅に拡大。</p>
+                    </div>
+                    <div class="bg-white border-2 border-label-black p-3 shadow-solid-sm relative">
+                        <span class="absolute -top-3 left-3 bg-label-yellow text-label-black font-900 px-2 border-2 border-label-black">2026</span>
+                        <p class="mt-2 font-900" data-i18n="history_2026">WARNING LABEL EDITIONへ全面リニューアル。商品注意書き風のUIへ進化。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 情報・仕様モーダル -->
+    <div class="modal-overlay" id="specModal" role="dialog" aria-modal="true" aria-labelledby="specModalTitle">
+        <div class="modal-panel">
+            <div class="modal-header">
+                <h2 id="specModalTitle" class="font-mplus font-900 text-xl text-label-black flex items-center gap-2 tracking-widest uppercase">
+                    <i data-lucide="info" class="w-6 h-6"></i>
+                    <span data-i18n="spec_title">情報・仕様</span>
+                </h2>
+                <button class="modal-close-btn" onclick="closeModal('specModal')" aria-label="閉じる">
+                    <i data-lucide="x" class="w-5 h-5 font-bold"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="border-4 border-label-black bg-label-gray p-4 mb-4 font-mono text-xs font-bold">
+                    <div class="flex justify-between border-b-2 border-label-black pb-1 mb-2">
+                        <span>MODEL</span><span>MA-01</span>
+                    </div>
+                    <div class="flex justify-between border-b-2 border-label-black pb-1 mb-2">
+                        <span>TYPE</span><span>WARNING LABEL UI</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>REV</span><span>2.0.0</span>
+                    </div>
+                </div>
+                
+                <table class="w-full text-sm font-800 text-label-black mb-4 border-collapse">
+                    <tbody>
+                        <tr class="border-b-2 border-label-black">
+                            <th class="py-2 text-left w-24 bg-label-black text-white px-2">技術</th>
+                            <td class="py-2 pl-3">Tailwind CSS / M+ Fonts / 単一HTML</td>
+                        </tr>
+                        <tr class="border-b-2 border-label-black">
+                            <th class="py-2 text-left w-24 bg-label-black text-white px-2">機能</th>
+                            <td class="py-2 pl-3">オノマトペ生成・設定・共有・コメント</td>
+                        </tr>
+                        <tr class="border-b-2 border-label-black">
+                            <th class="py-2 text-left w-24 bg-label-black text-white px-2">デザイン</th>
+                            <td class="py-2 pl-3 text-label-red font-900">WARNING LABEL / パッケージ注意書き</td>
+                        </tr>
+                        <tr>
+                            <th class="py-2 text-left w-24 bg-label-black text-white px-2">対応</th>
+                            <td class="py-2 pl-3">レスポンシブ / キーボード操作</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="bg-label-yellow border-2 border-label-black p-2 text-center shadow-solid-sm mt-4">
+                    <p class="text-xs font-900 text-label-black" data-i18n="spec_note">※ オノマトペはフィクション作品のための創作支援ツールです。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- トースト通知 -->
+    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+    <script>
+        // ===== Lucide Icons 初期化 =====
+        lucide.createIcons();
+
+        // ===== データ定義 =====
+        const sounds = {
+            impact: ["ドゴォン", "ガンッ", "バキィッ", "ゴンッ", "ドンッ", "ガツン", "ボゴォッ", "バギャッ", "ズドン", "ガガン"],
+            compress: ["ミシミシ", "グググ", "ギチギチ", "ムニュゥ", "グシャァ", "メキメキ", "ギリギリ"],
+            tear: ["ブチィ", "ビリビリ", "ズリィ", "バリィ", "メリメリ", "ビチャァ"],
+            twist: ["ギリギリ", "メキィ", "ギャリ", "ゴキッ", "ネジネジ", "メギメギ"],
+            meat: ["グチュゥ", "ヌチャァ", "ジュブ", "ビチャ", "ムニュ", "ゴボォ", "グジュ"],
+            bite: ["ガブゥ", "ガリィ", "バリバリ", "ガギン", "ムシャァ", "ギャリギャリ"],
+            slowbite: ["ギチ……", "ギチギチ……", "グググゥッ……", "ムニュゥ……", "ミチミチィ……", "メキ……",
+                "メキメキ……", "ブチ……", "ビリィ……", "グジュゥ……"
+            ]
+        };
+
+        const hardSuffix = ["ッッッ！！！", "ッッ！！！", "ッ！！！", "ッッ！！", "ッ！！", "ッ！"];
+        const warSuffix = ["ドドドドド", "バリバリバリ", "ズガガガガ", "ドカドカドカ", "ガガガガン", "バキバキバキ"];
+
+        // ===== 状態管理 =====
+        let currentFlavor = 'all';
+        let currentStyle = 'impact';
+        let currentLanguage = 'ja';
+        let comments = [];
+
+        // ローカルストレージからコメント読み込み
+        function loadComments() {
+            try {
+                const stored = localStorage.getItem('aero_comments');
+                if (stored) {
+                    comments = JSON.parse(stored);
+                }
+            } catch (e) {
+                comments = [];
+            }
+        }
+
+        function saveComments() {
+            try {
+                localStorage.setItem('aero_comments', JSON.stringify(comments));
+            } catch (e) { /* ストレージエラーは無視 */ }
+        }
+
+        // ===== 翻訳データ =====
+        const translations = {
+            ja: {
+                hero_subtitle: 'オノマトペたりてる？— 水と空気のような清涼感ある戦闘表現を。',
+                output_title: '生成結果',
+                copy: 'COPY',
+                share: 'SHARE',
+                generate: '生成する / EXECUTE',
+                flavor_label: 'フレーバー',
+                flavor_all: 'ALL',
+                flavor_hard: '硬派風',
+                flavor_war: '戦争漫画風',
+                style_label: 'スタイル',
+                style_impact: '打撃',
+                style_compress: '圧縮',
+                style_tear: '引き裂き',
+                style_twist: '捻り',
+                style_meat: '肉質',
+                style_bite: '咬み砕き',
+                style_slowbite: 'じわじわ',
+                style_mixed: '全部混ぜ',
+                power_label: '強度 [POWER]',
+                wet_label: '湿り気 [WETNESS]',
+                chain_label: '連続性 [CHAIN]',
+                disclaimer: '※ 本ツールはフィクション作品の創作支援を目的としています。実際の暴力行為を推奨するものではありません。',
+                comment_title: 'コメント',
+                comment_subtitle: '感想やリクエストをどうぞ。',
+                comment_post: '投稿',
+                comment_name_placeholder: '名前（任意）',
+                comment_text_placeholder: 'コメントを書く...',
+                comment_empty: 'まだコメントはありません。最初のコメントを投稿してみましょう！',
+                toast_copied: 'コピー完了 / COPIED',
+                toast_share_failed: '共有エラー / SHARE FAILED',
+                toast_comment_added: '報告受領 / REPORT RECEIVED',
+                toast_comment_reported: '通報完了 / REPORTED',
+                lang_title: '言語設定',
+                lang_subtitle: '表示言語を選択してください。',
+                lang_note: '※ 一部のテキストのみ翻訳されます。',
+                history_title: '沿革',
+                history_2024: '戦闘オノマトペ生成エンジン誕生。初期版では単純なランダム生成のみでした。',
+                history_2025: 'スタイル選択機能、強度・湿り気・連続性スライダーを追加。表現の幅が大幅に拡大。',
+                history_2026: 'WARNING LABEL EDITIONへ全面リニューアル。商品注意書き風のUIへ進化。',
+                spec_title: '情報・仕様',
+                spec_note: '※ オノマトペはフィクション作品のための創作支援ツールです。',
+                menu_language: 'LANGUAGE / 言語設定',
+                menu_history: 'HISTORY / 沿革',
+                menu_spec: 'SPEC / 情報・仕様',
+                menu_footer: '戦闘オノマトペ生成エンジン<br>MODEL: MA-01 / WARNING LABEL ED.',
+                footer_copyright: '© 2024 戦闘オノマトペ生成エンジン',
+                footer_history: '沿革',
+                footer_spec: '仕様',
+                footer_language: '言語',
+                like: 'YES',
+                dislike: 'NO',
+                report: 'REPORT',
+            },
+            en: {
+                hero_subtitle: 'Are you onomatopoeia enough? — Clear combat expressions.',
+                output_title: 'OUTPUT',
+                copy: 'COPY',
+                share: 'SHARE',
+                generate: 'EXECUTE',
+                flavor_label: 'FLAVOR',
+                flavor_all: 'ALL',
+                flavor_hard: 'HARD',
+                flavor_war: 'WAR MANGA',
+                style_label: 'STYLE',
+                style_impact: 'IMPACT',
+                style_compress: 'COMPRESS',
+                style_tear: 'TEAR',
+                style_twist: 'TWIST',
+                style_meat: 'FLESH',
+                style_bite: 'BITE',
+                style_slowbite: 'SLOW BITE',
+                style_mixed: 'MIXED',
+                power_label: 'POWER',
+                wet_label: 'WETNESS',
+                chain_label: 'CHAIN',
+                disclaimer: '* This tool is for fiction writing support only. It does not endorse real violence.',
+                comment_title: 'REPORTS',
+                comment_subtitle: 'Share your thoughts.',
+                comment_post: 'SUBMIT',
+                comment_name_placeholder: 'NAME (OPTIONAL)',
+                comment_text_placeholder: 'WRITE A REPORT...',
+                comment_empty: 'NO REPORTS YET.',
+                toast_copied: 'COPIED TO CLIPBOARD',
+                toast_share_failed: 'SHARE FAILED.',
+                toast_comment_added: 'REPORT RECEIVED',
+                toast_comment_reported: 'REPORTED',
+                lang_title: 'LANGUAGE',
+                lang_subtitle: 'SELECT LANGUAGE.',
+                lang_note: '* Only partial translation.',
+                history_title: 'HISTORY',
+                history_2024: 'Engine launched. Simple random generation.',
+                history_2025: 'Added style selection and sliders.',
+                history_2026: 'WARNING LABEL EDITION launched.',
+                spec_title: 'SPECS',
+                spec_note: '* Creative support tool for fiction.',
+                menu_language: 'LANGUAGE',
+                menu_history: 'HISTORY',
+                menu_spec: 'SPECS',
+                menu_footer: 'COMBAT ONOMATOPOEIA ENGINE<br>MODEL: MA-01 / WARNING LABEL ED.',
+                footer_copyright: '© 2024 COE',
+                footer_history: 'HISTORY',
+                footer_spec: 'SPECS',
+                footer_language: 'LANGUAGE',
+                like: 'YES',
+                dislike: 'NO',
+                report: 'REPORT',
+            }
+        };
+
+        // ===== 言語設定 =====
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            document.documentElement.lang = lang === 'ja' ? 'ja' : 'en';
+            applyTranslations();
+            closeModal('languageModal');
+            updateCommentUI();
+            showToast(lang === 'ja' ? '言語を日本語に設定しました' : 'Language set to English', 'check');
+        }
+
+        function applyTranslations() {
+            const t = translations[currentLanguage] || translations.ja;
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (t[key]) {
+                    el.innerHTML = t[key]; // HTMLタグ(brなど)を含む場合があるためinnerHTML
+                }
+            });
+            // プレースホルダー更新
+            const nameInput = document.getElementById('commentName');
+            const textInput = document.getElementById('commentText');
+            if (nameInput) nameInput.placeholder = t.comment_name_placeholder || '名前（任意）';
+            if (textInput) textInput.placeholder = t.comment_text_placeholder || 'コメントを書く...';
+        }
+
+        // ===== サイドメニュー =====
+        function openSideMenu() {
+            document.getElementById('sideMenu').classList.add('open');
+            document.getElementById('sideMenuBackdrop').classList.add('open');
+        }
+
+        function closeSideMenu() {
+            document.getElementById('sideMenu').classList.remove('open');
+            document.getElementById('sideMenuBackdrop').classList.remove('open');
+        }
+
+        document.getElementById('sideMenuBackdrop').addEventListener('click', closeSideMenu);
+
+        // ===== モーダル =====
+        function openModal(id) {
+            closeSideMenu();
+            const modal = document.getElementById(id);
+            modal.classList.add('open');
+            document.body.style.overflow = 'hidden';
+            const closeBtn = modal.querySelector('.modal-close-btn');
+            if (closeBtn) closeBtn.focus();
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        // モーダル背景クリックで閉じる
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.classList.remove('open');
+                    document.body.style.overflow = '';
+                }
+            });
+        });
+
+        // Escapeキーでモーダルを閉じる
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal-overlay.open').forEach(modal => {
+                    modal.classList.remove('open');
+                    document.body.style.overflow = '';
+                });
+                closeSideMenu();
+            }
+        });
+
+        // ===== トースト通知 =====
+        function showToast(message, icon = 'check') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `
+                <i data-lucide="${icon}" class="w-5 h-5 toast-icon border-2 border-black rounded-full p-0.5 bg-black text-white"></i>
+                <span class="flex-1">${message}</span>
+            `;
+            container.appendChild(toast);
+            lucide.createIcons();
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    toast.remove();
+                }, 200);
+            }, 3000);
+        }
+
+        // ===== オノマトペ生成 =====
+        function rand(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        function repeatIntensity(text, power) {
+            if (power < 4) return text;
+            if (power < 7) return text + "ッ！！";
+            return text + "！！！";
+        }
+
+        function applyFlavor(text, flavor, power) {
+            if (flavor === 'hard') {
+                const suffix = rand(hardSuffix);
+                if (power >= 7) {
+                    return text + suffix;
+                } else if (power >= 4) {
+                    return text + 'ッ！';
+                }
+            } else if (flavor === 'war') {
+                if (Math.random() > 0.6) {
+                    const warAdd = rand(warSuffix);
+                    return text + ' ' + warAdd;
+                } else if (power >= 5) {
+                    return text + 'ッッ！！';
+                }
+            }
+            return text;
+        }
+
+        function generate() {
+            const style = document.getElementById('style').value;
+            const power = parseInt(document.getElementById('power').value);
+            const wet = parseInt(document.getElementById('wet').value);
+            const chain = parseInt(document.getElementById('chain').value);
+
+            let result = "";
+
+            for (let i = 0; i < chain; i++) {
+                let pick = "";
+                if (style === "mixed") {
+                    let groups = ["impact", "compress", "tear", "twist", "bite"];
+                    if (wet > 4) {
+                        groups.push("meat");
+                    }
+                    pick = rand(sounds[rand(groups)]);
+                } else {
+                    pick = rand(sounds[style]);
+                    if (wet > 6 && Math.random() > 0.5) {
+                        pick += rand(sounds.meat);
+                    }
+                }
+                let processed = repeatIntensity(pick, power);
+                processed = applyFlavor(processed, currentFlavor, power);
+                result += processed + " ";
+            }
+
+            if (style === "slowbite") {
+                result += "\n\n";
+                let slowText = "――ギチ……ギチギチ……グググゥッ……ミチミチ……メキ……ブチ……グジュゥ……";
+                if (currentFlavor === 'hard') {
+                    slowText = "――ギチ……ギチギチ……グググゥッ……ミチミチ……メキ……ブチ……グジュゥ……ッッッ！！！";
+                } else if (currentFlavor === 'war') {
+                    slowText = "――ギチ……ギチギチ……グググゥッ……ミチミチ……メキ……ブチ……グジュゥ……ドドドドド！";
+                }
+                result += slowText;
+            }
+
+            const outputEl = document.getElementById('output');
+            outputEl.value = result.trim();
+
+            // 軽いフラッシュ演出（注意書き的ハードな演出）
+            outputEl.style.transition = 'none';
+            outputEl.style.backgroundColor = 'var(--warning-yellow)';
+            outputEl.style.color = '#000';
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    outputEl.style.transition = 'all 0.3s ease';
+                    outputEl.style.backgroundColor = 'transparent';
+                    outputEl.style.color = 'var(--text-primary)';
+                }, 50);
+            });
+        }
+
+        // ===== フレーバー切り替え =====
+        function updateSegmentIndicator() {
+            const segment = document.getElementById('flavorSegment');
+            const indicator = document.getElementById('segmentIndicator');
+            const activeBtn = segment.querySelector('.segment-btn.active');
+            if (!activeBtn) return;
+            const btnWidth = activeBtn.offsetWidth;
+            const btnLeft = activeBtn.offsetLeft;
+            // ボーダーの太さ分を加味
+            indicator.style.width = (btnWidth + 8) + 'px'; 
+            indicator.style.left = (btnLeft - 4) + 'px';
+        }
+
+        document.querySelectorAll('#flavorSegment .segment-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const segment = document.getElementById('flavorSegment');
+                segment.querySelectorAll('.segment-btn').forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-selected', 'false');
+                });
+                btn.classList.add('active');
+                btn.setAttribute('aria-selected', 'true');
+                currentFlavor = btn.getAttribute('data-flavor');
+                updateSegmentIndicator();
+                generate();
+            });
+        });
+
+        // ===== スタイルチップ =====
+        const styleChips = document.querySelectorAll('.style-chip-btn');
+        const hiddenStyleInput = document.getElementById('style');
+
+        styleChips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                styleChips.forEach(c => {
+                    c.classList.remove('active');
+                });
+                chip.classList.add('active');
+                hiddenStyleInput.value = chip.getAttribute('data-value');
+                currentStyle = chip.getAttribute('data-value');
+                generate();
+            });
+        });
+
+        // ===== スライダー =====
+        const powerSlider = document.getElementById('power');
+        const wetSlider = document.getElementById('wet');
+        const chainSlider = document.getElementById('chain');
+        const powerValue = document.getElementById('powerValue');
+        const wetValue = document.getElementById('wetValue');
+        const chainValue = document.getElementById('chainValue');
+
+        powerSlider.addEventListener('input', () => {
+            powerValue.textContent = powerSlider.value;
+        });
+        wetSlider.addEventListener('input', () => {
+            wetValue.textContent = wetSlider.value;
+        });
+        chainSlider.addEventListener('input', () => {
+            chainValue.textContent = chainSlider.value;
+        });
+
+        let debounceTimer;
+        function debouncedGenerate() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                generate();
+            }, 250);
+        }
+        powerSlider.addEventListener('change', debouncedGenerate);
+        wetSlider.addEventListener('change', debouncedGenerate);
+        chainSlider.addEventListener('change', debouncedGenerate);
+
+        // ===== コピー機能 =====
+        function copyText() {
+            const output = document.getElementById('output');
+            const text = output.value;
+            if (!text) {
+                showToast('NO DATA', 'triangle-exclamation');
+                return;
+            }
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(translations[currentLanguage].toast_copied || 'コピーしました');
+            }).catch(() => {
+                output.select();
+                document.execCommand('copy');
+                showToast(translations[currentLanguage].toast_copied || 'コピーしました');
+            });
+        }
+
+        // ===== 共有機能 =====
+        function shareText() {
+            const text = document.getElementById('output').value;
+            if (!text) {
+                showToast('NO DATA', 'triangle-exclamation');
+                return;
+            }
+            if (navigator.share) {
+                navigator.share({ title: '戦闘オノマトペ', text: text }).catch((err) => {
+                    if (err.name !== 'AbortError') {
+                        showToast(translations[currentLanguage].toast_share_failed || '共有エラー', 'triangle-exclamation');
+                    }
+                });
+            } else {
+                copyText();
+                showToast('COPIED INSTEAD OF SHARE', 'info');
+            }
+        }
+
+        // ===== コメント機能 (UIの置き換え) =====
+        function renderComments() {
+            const list = document.getElementById('commentList');
+            if (!list) return;
+            if (comments.length === 0) {
+                const t = translations[currentLanguage] || translations.ja;
+                list.innerHTML =
+                    `<div class="border-2 border-dashed border-label-black p-8 text-center text-label-darkgray font-900">${t.comment_empty || 'NO REPORTS YET.'}</div>`;
+                return;
+            }
+            list.innerHTML = '';
+            comments.forEach((comment, index) => {
+                const div = document.createElement('div');
+                // UIを「商品注意書きUI」のレポート風に変更
+                div.className = 'comment-item bg-white border-[3px] border-label-black p-0 mb-4 shadow-solid-sm relative overflow-hidden';
+                div.setAttribute('data-comment-index', index);
+                
+                const name = comment.name || 'ANONYMOUS';
+                const time = new Date(comment.timestamp).toLocaleString();
+                const likeCount = comment.likes || 0;
+                const dislikeCount = comment.dislikes || 0;
+                const liked = comment.userLiked || false;
+                const disliked = comment.userDisliked || false;
+                const reported = comment.reported || false;
+                const t = translations[currentLanguage] || translations.ja;
+
+                div.innerHTML = `
+                    <div class="h-2 warning-stripe-thin border-b-2 border-label-black"></div>
+                    <div class="p-3 sm:p-4">
+                        <div class="flex items-center gap-2 flex-wrap mb-2 border-b-2 border-label-black pb-2">
+                            <span class="font-mplus font-900 text-xs sm:text-sm bg-label-black text-label-yellow px-2 py-0.5 border-2 border-label-black uppercase tracking-wider shadow-[2px_2px_0_#111]">ID: ${escapeHtml(name)}</span>
+                            <span class="text-[10px] sm:text-xs font-900 text-label-darkgray border-l-2 border-label-black pl-2">${time}</span>
+                        </div>
+                        <p class="text-base sm:text-lg font-900 text-label-black mt-3 mb-4 leading-relaxed break-words bg-label-gray p-3 border-2 border-label-black">${escapeHtml(comment.text)}</p>
+                        
+                        <div class="flex justify-end items-center gap-2 mt-2 flex-wrap bg-[#f8f8f8] -mx-4 -mb-4 p-2 border-t-2 border-label-black">
+                            <span class="text-[10px] font-900 mr-auto ml-2">EVALUATION:</span>
+                            <button class="comment-action-btn ${liked ? 'bg-label-yellow' : ''}" onclick="toggleCommentLike(${index})" aria-label="${t.like}">
+                                <i class="fa-solid fa-thumbs-up"></i> ${likeCount}
+                            </button>
+                            <button class="comment-action-btn ${disliked ? 'bg-label-black text-white' : ''}" onclick="toggleCommentDislike(${index})" aria-label="${t.dislike}">
+                                <i class="fa-solid fa-thumbs-down"></i> ${dislikeCount}
+                            </button>
+                            <button class="comment-action-btn ${reported ? 'bg-label-red text-white' : ''}" onclick="reportComment(${index})" aria-label="${t.report}">
+                                <i class="fa-solid fa-flag"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function updateCommentUI() {
+            renderComments();
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function submitComment() {
+            const nameInput = document.getElementById('commentName');
+            const textInput = document.getElementById('commentText');
+            const name = nameInput.value.trim();
+            const text = textInput.value.trim();
+
+            if (!text) {
+                showToast('テキストを入力してください', 'triangle-exclamation');
+                textInput.focus();
+                return;
+            }
+
+            const newComment = {
+                name: name || 'ANONYMOUS',
+                text: text,
+                timestamp: Date.now(),
+                likes: 0,
+                dislikes: 0,
+                userLiked: false,
+                userDisliked: false,
+                reported: false,
+            };
+
+            comments.unshift(newComment);
+            saveComments();
+            renderComments();
+            nameInput.value = '';
+            textInput.value = '';
+            showToast(translations[currentLanguage].toast_comment_added || '報告を受領しました');
+            textInput.focus();
+        }
+
+        function toggleCommentLike(index) {
+            if (comments[index]) {
+                if (comments[index].userLiked) {
+                    comments[index].likes = Math.max(0, (comments[index].likes || 0) - 1);
+                    comments[index].userLiked = false;
+                } else {
+                    if (comments[index].userDisliked) {
+                        comments[index].dislikes = Math.max(0, (comments[index].dislikes || 0) - 1);
+                        comments[index].userDisliked = false;
+                    }
+                    comments[index].likes = (comments[index].likes || 0) + 1;
+                    comments[index].userLiked = true;
+                }
+                saveComments();
+                renderComments();
+            }
+        }
+
+        function toggleCommentDislike(index) {
+            if (comments[index]) {
+                if (comments[index].userDisliked) {
+                    comments[index].dislikes = Math.max(0, (comments[index].dislikes || 0) - 1);
+                    comments[index].userDisliked = false;
+                } else {
+                    if (comments[index].userLiked) {
+                        comments[index].likes = Math.max(0, (comments[index].likes || 0) - 1);
+                        comments[index].userLiked = false;
+                    }
+                    comments[index].dislikes = (comments[index].dislikes || 0) + 1;
+                    comments[index].userDisliked = true;
+                }
+                saveComments();
+                renderComments();
+            }
+        }
+
+        function reportComment(index) {
+            if (comments[index]) {
+                comments[index].reported = !comments[index].reported;
+                saveComments();
+                renderComments();
+                showToast(translations[currentLanguage].toast_comment_reported || '通報しました', 'triangle-exclamation');
+            }
+        }
+
+        // コメント投稿のEnterキー対応
+        document.getElementById('commentText').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submitComment();
+            }
+        });
+        document.getElementById('commentName').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('commentText').focus();
+            }
+        });
+
+        // ===== 初期化 =====
+        function init() {
+            loadComments();
+            renderComments();
+            applyTranslations();
+            updateSegmentIndicator();
+            generate();
+
+            // ウィンドウリサイズ時にセグメントインジケーター更新
+            window.addEventListener('resize', () => {
+                updateSegmentIndicator();
+                setTimeout(updateSegmentIndicator, 100);
+            });
+
+            // 初期スライダー値表示
+            powerValue.textContent = powerSlider.value;
+            wetValue.textContent = wetSlider.value;
+            chainValue.textContent = chainSlider.value;
+
+            // アクセシビリティ：モーダルのフォーカス管理
+            document.querySelectorAll('.modal-overlay').forEach(overlay => {
+                overlay.addEventListener('keydown', (e) => {
+                    if (e.key === 'Tab') {
+                        const focusable = overlay.querySelectorAll(
+                            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                        if (focusable.length === 0) return;
+                        const first = focusable[0];
+                        const last = focusable[focusable.length - 1];
+                        if (e.shiftKey && document.activeElement === first) {
+                            e.preventDefault();
+                            last.focus();
+                        } else if (!e.shiftKey && document.activeElement === last) {
+                            e.preventDefault();
+                            first.focus();
+                        }
+                    }
+                });
+            });
+        }
+
+        // キーボードショートカット
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                generate();
+                // 押下エフェクト
+                const btn = document.getElementById('generateBtn');
+                btn.style.transform = 'translate(-2px, -2px)';
+                btn.style.boxShadow = '10px 10px 0px 0px rgba(17,17,17,1)';
+                setTimeout(() => {
+                    btn.style.transform = '';
+                    btn.style.boxShadow = '';
+                }, 150);
+            }
+        });
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+        // lucideアイコンの再初期化
+        const observer = new MutationObserver(() => {
+            lucide.createIcons();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    </script>
+</body>
+</html>
